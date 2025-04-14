@@ -4,22 +4,26 @@ import (
 	"log"
 	"net/http"
 	"user-service/internal/model"
-	"user-service/internal/repository"
 	"user-service/internal/service"
-
+	"user-service/internal/utils"
+	"github.com/google/uuid"
 	"github.com/gin-gonic/gin"
 )
 
+// Register handles user registration
 func Register(c *gin.Context) {
 	var user model.User
+	user.ID = uuid.New().String()
+
+	// Binding JSON from the request body to the user model
 	if err := c.ShouldBindJSON(&user); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	err := repository.CreateUser(&user)
+	// Register the user
+	err := service.Register(&user)
 	if err != nil {
-		// Error print kr de console mein
 		log.Println("Register Error:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -28,16 +32,33 @@ func Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
 }
 
+// Login handles user login
 func Login(c *gin.Context) {
-	var user model.User
-	if err := c.ShouldBindJSON(&user); err != nil {
+	var req model.LoginRequest
+
+	// Binding JSON from the request body
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	u, err := service.Login(user.Email, user.Password)
+
+	// Perform login
+	user, err := service.Login(req.Email, req.Password)
 	if err != nil {
+		log.Println("Login Error:", err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid Credentials"})
 		return
 	}
-	c.JSON(http.StatusOK, u)
+
+	// Generate token after successful login
+	token, err := utils.GenerateToken(user.Email)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Login successful",
+		"token":   token,
+	})
 }
